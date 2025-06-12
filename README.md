@@ -1,0 +1,1 @@
+# MSA_atrophy_index
