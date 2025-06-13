@@ -8,23 +8,6 @@ base_set = {"feature_1": ["PallidumTotalVolume_", "PutamenTotalVolume_"],
             "feature_3": ["BrainstemVolume_"]}
 
 
-# Basis function to calculate z_score and w_score
-def zscore_vector(vec):
-    return (vec - vec.mean()) / vec.std()
-
-def wscore_feature(dataframe, column, formula="{} ~ 1 + Age"):
-    X     = dataframe[column].to_numpy().reshape(-1, 1)
-    Z_std = X.std()
-    age_exog = dataframe.Age.to_numpy()
-    sex_exog = (dataframe.Sex.to_numpy() == "M").astype(np.float32)
-    grid = pd.DataFrame({"Age": age_exog, "Sex": sex_exog})
-
-    mdl = smf.ols(formula=formula.format(column), data=dataframe).fit()
-    wscore = (X - mdl.predict(grid).to_numpy()) / Z_std
-    return wscore
-
-
-
 # MSA atrophy index class
 class msai_ai_linear():
 
@@ -46,8 +29,6 @@ class msai_ai_linear():
         columns.append("Age")
         columns.append("Sex")
         data_ref   = pd.DataFrame(data=X_ref, columns=columns)
-
-        print(data_ref)
 
         self.__model_fit__(data_ref, formula)
         self.a_fun = a_fun
@@ -79,7 +60,6 @@ class msai_ai_linear():
         for i, feat in enumerate(features):
             print("Fitting model for formula : {}".format(formula.format(feat)))
             mdl = smf.ols(formula=formula.format(feat), data=data).fit()
-            print(mdl.summary())
             self._mdls_.append(mdl)
 
 
