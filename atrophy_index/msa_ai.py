@@ -15,7 +15,8 @@ class msai_ai_linear():
                  feature_set=base_set,
                  a_fun=np.sum,
                  formula="{} ~ 1 + Age",
-                 age_lim=[40,80]):
+                 age_lim=[40,80],
+                 weight=[]):
 
         self.reference_data = pd.read_excel(reference_sheet)
         self.reference_data = self.reference_data[(self.reference_data.Age>=age_lim[0]) & (self.reference_data.Age<=age_lim[1])]
@@ -32,6 +33,13 @@ class msai_ai_linear():
 
         self.__model_fit__(data_ref, formula)
         self.a_fun = a_fun
+
+        if len(weight)==0:
+            weight = [1 for i in range(len(self.feature_set.keys))]
+        if not (len(weight)==len(self.feature_set.keys())):
+            raise Exception("Weights must have same length as feature_set")
+        self.weight = weight
+
 
 
     def __array_prep__(self, dataframe, is_training=False):
@@ -63,7 +71,7 @@ class msai_ai_linear():
             self._mdls_.append(mdl)
 
 
-    def compute_msa_ai(self, data, weight=[0.3, 0.3, 0.3]):
+    def compute_msa_ai(self, data):
             age_exog = data.Age.to_numpy()
             sex_exog = (data.Sex.to_numpy()=="M").astype(np.float32)
             grid = pd.DataFrame({"Age": age_exog, "Sex": sex_exog})
@@ -74,7 +82,7 @@ class msai_ai_linear():
                 wscore = (X[:,i] - mdl.predict(grid).to_numpy()) / self.Z_std[i]
                 V.append(wscore.reshape(-1,1))
             V = np.concatenate(V,axis=1)
-            W = np.tile(weight, (V.shape[0], 1))
+            W = np.tile(self.weight, (V.shape[0], 1))
 
             return self.a_fun(V * W,axis=1)
 
