@@ -302,7 +302,7 @@ class msai_ai_linear():
     def score_to_spreadsheet(self, data, output_path, subject_col="Subject"):
         """
         Score subjects and write a results spreadsheet with the columns:
-        Subject, Age, Sex, wscore_pallidum_putamen, wscore_cerebellum,
+        Subject, Age, Sex, wscore_lentiform, wscore_cerebellum,
         wscore_brainstem, MSA_AI.
 
         Parameters
@@ -339,7 +339,7 @@ class msai_ai_linear():
             "Subject": subjects,
             "Age": data.Age.to_numpy(),
             "Sex": data.Sex.to_numpy(),
-            "wscore_pallidum_putamen": wscores[:, 0],
+            "wscore_lentiform": wscores[:, 0],
             "wscore_cerebellum": wscores[:, 1],
             "wscore_brainstem": wscores[:, 2],
             "MSA_AI": msa_ai,
