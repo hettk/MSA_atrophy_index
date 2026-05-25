@@ -302,8 +302,10 @@ class msai_ai_linear():
     def score_to_spreadsheet(self, data, output_path, subject_col="Subject"):
         """
         Score subjects and write a results spreadsheet with the columns:
-        Subject, Age, Sex, wscore_lentiform, wscore_cerebellum,
-        wscore_brainstem, MSA_AI.
+        [Subject_ID], [Visit], Subject, Age, Sex, wscore_lentiform,
+        wscore_cerebellum, wscore_brainstem, MSA_AI.
+
+        Subject_ID and Visit are included only when present in the input.
 
         Parameters
         ----------
@@ -329,21 +331,27 @@ class msai_ai_linear():
         msa_ai = self.compute_msa_ai(data)
         wscores = self.last_wscores_
 
+        # Build the output columns in order. Carry over Subject_ID and Visit
+        # from the input when they exist (skipped silently if absent).
+        out_cols = {}
+        for id_col in ("Subject_ID", "Visit"):
+            if id_col in data.columns:
+                out_cols[id_col] = data[id_col].to_numpy()
+
         # Use the subject id column if present, otherwise number the rows.
         if subject_col in data.columns:
-            subjects = data[subject_col].to_numpy()
+            out_cols["Subject"] = data[subject_col].to_numpy()
         else:
-            subjects = np.arange(1, len(data) + 1)
+            out_cols["Subject"] = np.arange(1, len(data) + 1)
 
-        out = pd.DataFrame({
-            "Subject": subjects,
-            "Age": data.Age.to_numpy(),
-            "Sex": data.Sex.to_numpy(),
-            "wscore_lentiform": wscores[:, 0],
-            "wscore_cerebellum": wscores[:, 1],
-            "wscore_brainstem": wscores[:, 2],
-            "MSA_AI": msa_ai,
-        })
+        out_cols["Age"] = data.Age.to_numpy()
+        out_cols["Sex"] = data.Sex.to_numpy()
+        out_cols["wscore_lentiform"] = wscores[:, 0]
+        out_cols["wscore_cerebellum"] = wscores[:, 1]
+        out_cols["wscore_brainstem"] = wscores[:, 2]
+        out_cols["MSA_AI"] = msa_ai
+
+        out = pd.DataFrame(out_cols)
 
         out.to_excel(output_path, index=False)
         print("Saved scored spreadsheet to: {}".format(output_path))
