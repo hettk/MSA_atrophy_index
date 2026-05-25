@@ -6,6 +6,22 @@ import pandas as pd
 
 
 # ---------------------------------------------------------------------------
+# Tabular file reader.
+#
+# Reads a spreadsheet into a DataFrame, choosing the loader from the file
+# extension: .csv/.tsv/.txt go through pandas.read_csv, everything else
+# (.xlsx/.xls) through pandas.read_excel. CSVs are read with the python engine
+# and sep=None so the delimiter (comma, semicolon, or tab) is auto-detected,
+# which matches the varying formats AssemblyNet merged reports come in.
+# ---------------------------------------------------------------------------
+def read_table(path):
+    lower = str(path).lower()
+    if lower.endswith((".csv", ".tsv", ".txt")):
+        return pd.read_csv(path, sep=None, engine="python")
+    return pd.read_excel(path)
+
+
+# ---------------------------------------------------------------------------
 # AssemblyNet column-name normalization.
 #
 # AssemblyNet exports human-readable headers like "Pallidum total volume cm3"
@@ -125,7 +141,8 @@ class msai_ai_linear():
 
         # Load the reference (normative) cohort and keep only subjects within
         # the age range over which the normative models are considered valid.
-        self.reference_data = pd.read_excel(reference_sheet)
+        # read_table accepts either a CSV or an Excel file.
+        self.reference_data = read_table(reference_sheet)
         # Normalize any raw AssemblyNet headers to the sanitized identifier
         # form (no-op if the sheet is already in that form).
         self.reference_data = rename_assemblynet_columns(self.reference_data)
@@ -250,6 +267,10 @@ class msai_ai_linear():
 
         More negative output => more atrophy.
         """
+        # Accept either an in-memory DataFrame or a path to a CSV/Excel file.
+        if not isinstance(data, pd.DataFrame):
+            data = read_table(data)
+
         # Normalize any raw AssemblyNet headers before reading volumes
         # (no-op if already in sanitized form).
         data = rename_assemblynet_columns(data)
@@ -286,14 +307,19 @@ class msai_ai_linear():
 
         Parameters
         ----------
-        data : DataFrame
-            Subjects to score (same volume/Age/Sex columns as the reference).
+        data : DataFrame or str
+            Subjects to score, either as a DataFrame or a path to a CSV/Excel
+            file (same volume/Age/Sex columns as the reference).
         output_path : str
             Destination .xlsx path.
         subject_col : str
             Name of the subject identifier column in `data`. If absent, a
             sequential index is used instead.
         """
+        # Accept either an in-memory DataFrame or a path to a CSV/Excel file.
+        if not isinstance(data, pd.DataFrame):
+            data = read_table(data)
+
         # Normalize any raw AssemblyNet headers up front so the Age/Sex and
         # subject-id reads below match (compute_msa_ai also normalizes, which
         # is harmless since the operation is idempotent).
