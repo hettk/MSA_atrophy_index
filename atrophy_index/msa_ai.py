@@ -1,6 +1,79 @@
+import re
+
 import numpy as np
 import statsmodels.formula.api as smf
 import pandas as pd
+
+
+# ---------------------------------------------------------------------------
+# AssemblyNet column-name normalization.
+#
+# AssemblyNet exports human-readable headers like "Pallidum total volume cm3"
+# and "Brainstem volume %". The volumetric columns in this pipeline use the
+# sanitized identifier form (e.g. "PallidumTotalVolumeCm3", "BrainstemVolume_").
+# This helper converts a raw AssemblyNet header into that sanitized form, so a
+# spreadsheet exported straight from AssemblyNet can be used without manually
+# renaming the columns first.
+#
+# The rule (verified to reproduce all 536 AssemblyNet columns exactly):
+#   - trailing " cm3"  -> suffix "Cm3"
+#   - trailing " %"    -> suffix "_"
+#   - "(", ")", ".", "+", "-" become underscore boundaries
+#     e.g. "(WM)" -> "_WM_", "inf." -> "Inf_", "WM+GM" -> "WM_GM", "I-V" -> "I_V"
+#   - remaining words are CamelCased and concatenated (all-caps tokens such as
+#     WM, GM, CSF, IC, DC are left untouched)
+#   - duplicate underscores are collapsed
+#   - a name starting with a digit gets an "x" prefix (e.g. "3rd" -> "x3rd")
+#
+# Columns that are not AssemblyNet volume headers (Subject, Age, Sex, or columns
+# already in sanitized form) are returned unchanged, so this is safe to apply to
+# any sheet and is idempotent (applying it twice changes nothing).
+# ---------------------------------------------------------------------------
+def assemblynet_to_identifier(name):
+    # Only touch raw AssemblyNet volume headers; pass everything else through.
+    if not (name.endswith(" cm3") or name.endswith(" %")
+            or " volume" in name or " asymmetry" in name):
+        return name
+
+    s = name
+    if s.endswith(" cm3"):
+        suffix = "Cm3"
+        s = s[:-4]
+    elif s.endswith(" %"):
+        suffix = "_"
+        s = s[:-2]
+    else:
+        suffix = ""
+
+    # Punctuation that should act as an underscore boundary.
+    for ch in ["(", ")", ".", "+", "-"]:
+        s = s.replace(ch, "_")
+
+    # Tokenize, keeping explicit underscores; CamelCase normal words and leave
+    # all-caps abbreviations (WM, GM, CSF, ...) as-is.
+    out = []
+    for part in re.split(r"(_)", s):
+        if part == "_":
+            out.append("_")
+        else:
+            for w in part.split():
+                out.append(w if w.isupper() else w[:1].upper() + w[1:])
+
+    res = "".join(out)
+    while "__" in res:          # collapse duplicate underscores
+        res = res.replace("__", "_")
+    res = res + suffix
+
+    if res and res[0].isdigit():  # identifiers cannot start with a digit
+        res = "x" + res
+    return res
+
+
+def rename_assemblynet_columns(dataframe):
+    """Return a copy of `dataframe` with AssemblyNet headers normalized to the
+    sanitized identifier form used by this pipeline. Non-volume columns (e.g.
+    Subject, Age, Sex) and already-sanitized columns are left unchanged."""
+    return dataframe.rename(columns=assemblynet_to_identifier)
 
 
 # ---------------------------------------------------------------------------
@@ -53,6 +126,9 @@ class msai_ai_linear():
         # Load the reference (normative) cohort and keep only subjects within
         # the age range over which the normative models are considered valid.
         self.reference_data = pd.read_excel(reference_sheet)
+        # Normalize any raw AssemblyNet headers to the sanitized identifier
+        # form (no-op if the sheet is already in that form).
+        self.reference_data = rename_assemblynet_columns(self.reference_data)
         self.reference_data = self.reference_data[
             (self.reference_data.Age >= age_lim[0]) &
             (self.reference_data.Age <= age_lim[1])
@@ -174,6 +250,10 @@ class msai_ai_linear():
 
         More negative output => more atrophy.
         """
+        # Normalize any raw AssemblyNet headers before reading volumes
+        # (no-op if already in sanitized form).
+        data = rename_assemblynet_columns(data)
+
         # Covariate grid used for prediction. The Sex column uses the same
         # binary "M" indicator as training so the design matches.
         age_exog = data.Age.to_numpy()
@@ -214,6 +294,11 @@ class msai_ai_linear():
             Name of the subject identifier column in `data`. If absent, a
             sequential index is used instead.
         """
+        # Normalize any raw AssemblyNet headers up front so the Age/Sex and
+        # subject-id reads below match (compute_msa_ai also normalizes, which
+        # is harmless since the operation is idempotent).
+        data = rename_assemblynet_columns(data)
+
         # Compute the index; this also populates self.last_wscores_.
         msa_ai = self.compute_msa_ai(data)
         wscores = self.last_wscores_
