@@ -72,7 +72,7 @@ class region_wscores(msai_ai_linear):
     """
 
     def __init__(self, reference_sheet, regions=REGIONS,
-                 formula="{} ~ 1 + Age", age_lim=[40, 80]):
+                 formula="{} ~ 1 + Age + Sex", age_lim=[40, 80]):
         # One feature per region: {feature name -> [single column]}.
         feature_set = {region: [region] for region in regions}
         self.regions = list(regions)
